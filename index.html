@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Snake Game </title>
+    <title>Snake Game - Fixed Touch Controls</title>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            -webkit-tap-highlight-color: transparent;
         }
         
         body {
@@ -40,14 +41,14 @@
             margin-bottom: 15px;
             color: #ffdd40;
             text-shadow: 0 0 10px rgba(255, 221, 64, 0.5);
-            font-size: 2.5rem;
+            font-size: 2.2rem;
         }
         
         .score-container {
             display: flex;
             justify-content: space-between;
             margin-bottom: 15px;
-            font-size: 1.2rem;
+            font-size: 1.1rem;
             background: rgba(255, 255, 255, 0.1);
             padding: 10px;
             border-radius: 8px;
@@ -60,6 +61,7 @@
             display: block;
             margin: 0 auto;
             box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+            touch-action: none;
         }
         
         .speed-control {
@@ -109,7 +111,7 @@
         }
         
         .action-buttons button {
-            padding: 12px 25px;
+            padding: 12px 20px;
             border: none;
             border-radius: 8px;
             font-weight: bold;
@@ -227,7 +229,6 @@
         }
         
         .swipe-area {
-            display: none;
             position: absolute;
             top: 0;
             left: 0;
@@ -263,6 +264,7 @@
         @media (max-width: 500px) {
             #game-board {
                 width: 100%;
+                height: auto;
             }
             
             .game-container {
@@ -281,6 +283,11 @@
             .action-buttons button {
                 width: 100%;
             }
+            
+            .score-container {
+                flex-direction: column;
+                gap: 10px;
+            }
         }
     </style>
 </head>
@@ -293,7 +300,7 @@
             <div>High Score: <span id="high-score">0</span></div>
         </div>
         
-        <div id="game-board-container">
+        <div id="game-board-container" style="position: relative;">
             <canvas id="game-board" width="400" height="400"></canvas>
             <div class="swipe-area" id="swipe-area"></div>
         </div>
@@ -344,6 +351,20 @@
         const speedSlider = document.getElementById('speed-slider');
         const speedValue = document.getElementById('speed-value');
         
+        // Adjust canvas size for mobile devices
+        function adjustCanvasSize() {
+            if (window.innerWidth <= 500) {
+                canvas.width = 300;
+                canvas.height = 300;
+            } else {
+                canvas.width = 400;
+                canvas.height = 400;
+            }
+        }
+        
+        adjustCanvasSize();
+        window.addEventListener('resize', adjustCanvasSize);
+        
         const gridSize = 20;
         const tileCount = canvas.width / gridSize;
         
@@ -368,6 +389,7 @@
         // For touch controls
         let touchStartX = null;
         let touchStartY = null;
+        let minSwipeDistance = 30; // Minimum distance for a swipe to be detected
         
         highScoreDisplay.textContent = highScore;
         speedValue.textContent = initialFps;
@@ -383,9 +405,9 @@
         // Initialize game
         function initGame() {
             snake = [
-                {x: 10, y: 10},
-                {x: 9, y: 10},
-                {x: 8, y: 10}
+                {x: Math.floor(tileCount/2), y: Math.floor(tileCount/2)},
+                {x: Math.floor(tileCount/2)-1, y: Math.floor(tileCount/2)},
+                {x: Math.floor(tileCount/2)-2, y: Math.floor(tileCount/2)}
             ];
             
             generateFood();
@@ -635,18 +657,20 @@
             }
         });
         
-        // Touch controls for mobile devices
-        swipeArea.addEventListener('touchstart', (e) => {
+        // Improved touch controls for mobile devices
+        let handleTouchStart = (e) => {
+            // Prevent default to avoid scrolling and browser interactions
+            e.preventDefault();
             touchStartX = e.touches[0].clientX;
             touchStartY = e.touches[0].clientY;
-            e.preventDefault();
-        }, { passive: false });
+        };
         
-        swipeArea.addEventListener('touchmove', (e) => {
+        let handleTouchMove = (e) => {
+            // Prevent default to avoid scrolling
             e.preventDefault();
-        }, { passive: false });
+        };
         
-        swipeArea.addEventListener('touchend', (e) => {
+        let handleTouchEnd = (e) => {
             if (!touchStartX || !touchStartY) return;
             
             const touchEndX = e.changedTouches[0].clientX;
@@ -655,35 +679,47 @@
             const diffX = touchEndX - touchStartX;
             const diffY = touchEndY - touchStartY;
             
-            // Determine the direction based on which difference is larger
-            if (Math.abs(diffX) > Math.abs(diffY)) {
-                // Horizontal swipe
-                if (diffX > 0 && dx === 0) {
-                    // Swipe right
-                    dx = 1;
-                    dy = 0;
-                } else if (diffX < 0 && dx === 0) {
-                    // Swipe left
-                    dx = -1;
-                    dy = 0;
-                }
-            } else {
-                // Vertical swipe
-                if (diffY > 0 && dy === 0) {
-                    // Swipe down
-                    dx = 0;
-                    dy = 1;
-                } else if (diffY < 0 && dy === 0) {
-                    // Swipe up
-                    dx = 0;
-                    dy = -1;
+            // Only consider it a swipe if the movement is significant enough
+            if (Math.abs(diffX) > minSwipeDistance || Math.abs(diffY) > minSwipeDistance) {
+                // Determine the direction based on which difference is larger
+                if (Math.abs(diffX) > Math.abs(diffY)) {
+                    // Horizontal swipe
+                    if (diffX > 0 && dx === 0) {
+                        // Swipe right
+                        dx = 1;
+                        dy = 0;
+                    } else if (diffX < 0 && dx === 0) {
+                        // Swipe left
+                        dx = -1;
+                        dy = 0;
+                    }
+                } else {
+                    // Vertical swipe
+                    if (diffY > 0 && dy === 0) {
+                        // Swipe down
+                        dx = 0;
+                        dy = 1;
+                    } else if (diffY < 0 && dy === 0) {
+                        // Swipe up
+                        dx = 0;
+                        dy = -1;
+                    }
                 }
             }
             
             touchStartX = null;
             touchStartY = null;
-            e.preventDefault();
-        }, { passive: false });
+        };
+        
+        // Add touch event listeners to the swipe area
+        swipeArea.addEventListener('touchstart', handleTouchStart, { passive: false });
+        swipeArea.addEventListener('touchmove', handleTouchMove, { passive: false });
+        swipeArea.addEventListener('touchend', handleTouchEnd, { passive: false });
+        
+        // Also add touch events to the canvas for better compatibility
+        canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+        canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+        canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
         
         // Button event listeners
         document.getElementById('start-btn').addEventListener('click', startGame);
