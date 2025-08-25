@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Snake Game - Fixed Touch Controls</title>
+    <title>Snake Game - Enhanced Touch Controls</title>
     <style>
         * {
             margin: 0;
@@ -235,6 +235,20 @@
             width: 100%;
             height: 100%;
             z-index: 5;
+            /* Temporary background for debugging */
+            /* background: rgba(255, 0, 0, 0.1); */
+        }
+        
+        .touch-indicator {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 221, 64, 0.5);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 6;
+            display: none;
         }
         
         @media (max-width: 768px) {
@@ -303,6 +317,7 @@
         <div id="game-board-container" style="position: relative;">
             <canvas id="game-board" width="400" height="400"></canvas>
             <div class="swipe-area" id="swipe-area"></div>
+            <div class="touch-indicator" id="touch-indicator"></div>
         </div>
         
         <div class="speed-control">
@@ -322,7 +337,7 @@
             <h3>How to Play:</h3>
             <ul>
                 <li>Use arrow keys to control the snake on desktop</li>
-                <li>Swipe in any direction to control on mobile</li>
+                <li>Swipe in any direction to control on mobile - now more sensitive!</li>
                 <li>Eat the red food to grow and earn points</li>
                 <li>Avoid hitting the walls or yourself</li>
                 <li>Adjust speed with the slider below the game</li>
@@ -348,6 +363,7 @@
         const finalScoreDisplay = document.getElementById('final-score');
         const finalHighScoreDisplay = document.getElementById('final-high-score');
         const swipeArea = document.getElementById('swipe-area');
+        const touchIndicator = document.getElementById('touch-indicator');
         const speedSlider = document.getElementById('speed-slider');
         const speedValue = document.getElementById('speed-value');
         
@@ -370,7 +386,7 @@
         
         // For smoother animation
         let then = 0;
-        let initialFps = 5; // Reduced from 12 to 5 for slower speed
+        let initialFps = 5;
         let fpsInterval = 1000 / initialFps;
         let now, elapsed;
         
@@ -389,7 +405,8 @@
         // For touch controls
         let touchStartX = null;
         let touchStartY = null;
-        let minSwipeDistance = 30; // Minimum distance for a swipe to be detected
+        let minSwipeDistance = 15; // Reduced from 30 to 15 for more sensitivity
+        let touchId = null;
         
         highScoreDisplay.textContent = highScore;
         speedValue.textContent = initialFps;
@@ -559,7 +576,7 @@
                 
                 generateFood();
                 
-                // Increase speed slightly with each food eaten (but much slower than before)
+                // Increase speed slightly with each food eaten
                 if (gameSpeed < 15) {
                     gameSpeed += 0.1;
                     fpsInterval = 1000 / gameSpeed;
@@ -657,27 +674,54 @@
             }
         });
         
-        // Improved touch controls for mobile devices
+        // Enhanced touch controls for mobile devices
         let handleTouchStart = (e) => {
             // Prevent default to avoid scrolling and browser interactions
             e.preventDefault();
-            touchStartX = e.touches[0].clientX;
-            touchStartY = e.touches[0].clientY;
+            
+            // Get the first touch
+            const touch = e.touches[0];
+            touchId = touch.identifier;
+            touchStartX = touch.clientX;
+            touchStartY = touch.clientY;
+            
+            // Show touch indicator
+            touchIndicator.style.display = 'block';
+            touchIndicator.style.left = touchStartX + 'px';
+            touchIndicator.style.top = touchStartY + 'px';
+            
+            // If game isn't running, start it on first touch
+            if (!gameRunning) {
+                startGame();
+            }
         };
         
         let handleTouchMove = (e) => {
             // Prevent default to avoid scrolling
             e.preventDefault();
-        };
-        
-        let handleTouchEnd = (e) => {
+            
             if (!touchStartX || !touchStartY) return;
             
-            const touchEndX = e.changedTouches[0].clientX;
-            const touchEndY = e.changedTouches[0].clientY;
+            // Find our touch
+            let touch = null;
+            for (let i = 0; i < e.touches.length; i++) {
+                if (e.touches[i].identifier === touchId) {
+                    touch = e.touches[i];
+                    break;
+                }
+            }
             
-            const diffX = touchEndX - touchStartX;
-            const diffY = touchEndY - touchStartY;
+            if (!touch) return;
+            
+            const touchCurrentX = touch.clientX;
+            const touchCurrentY = touch.clientY;
+            
+            // Update touch indicator position
+            touchIndicator.style.left = touchCurrentX + 'px';
+            touchIndicator.style.top = touchCurrentY + 'px';
+            
+            const diffX = touchCurrentX - touchStartX;
+            const diffY = touchCurrentY - touchStartY;
             
             // Only consider it a swipe if the movement is significant enough
             if (Math.abs(diffX) > minSwipeDistance || Math.abs(diffY) > minSwipeDistance) {
@@ -688,10 +732,14 @@
                         // Swipe right
                         dx = 1;
                         dy = 0;
+                        touchStartX = touchCurrentX;
+                        touchStartY = touchCurrentY;
                     } else if (diffX < 0 && dx === 0) {
                         // Swipe left
                         dx = -1;
                         dy = 0;
+                        touchStartX = touchCurrentX;
+                        touchStartY = touchCurrentY;
                     }
                 } else {
                     // Vertical swipe
@@ -699,27 +747,48 @@
                         // Swipe down
                         dx = 0;
                         dy = 1;
+                        touchStartX = touchCurrentX;
+                        touchStartY = touchCurrentY;
                     } else if (diffY < 0 && dy === 0) {
                         // Swipe up
                         dx = 0;
                         dy = -1;
+                        touchStartX = touchCurrentX;
+                        touchStartY = touchCurrentY;
                     }
                 }
             }
+        };
+        
+        let handleTouchEnd = (e) => {
+            // Hide touch indicator
+            touchIndicator.style.display = 'none';
             
             touchStartX = null;
             touchStartY = null;
+            touchId = null;
+        };
+        
+        let handleTouchCancel = (e) => {
+            // Hide touch indicator
+            touchIndicator.style.display = 'none';
+            
+            touchStartX = null;
+            touchStartY = null;
+            touchId = null;
         };
         
         // Add touch event listeners to the swipe area
         swipeArea.addEventListener('touchstart', handleTouchStart, { passive: false });
         swipeArea.addEventListener('touchmove', handleTouchMove, { passive: false });
         swipeArea.addEventListener('touchend', handleTouchEnd, { passive: false });
+        swipeArea.addEventListener('touchcancel', handleTouchCancel, { passive: false });
         
         // Also add touch events to the canvas for better compatibility
         canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
         canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
         canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+        canvas.addEventListener('touchcancel', handleTouchCancel, { passive: false });
         
         // Button event listeners
         document.getElementById('start-btn').addEventListener('click', startGame);
